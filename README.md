@@ -13,3 +13,6 @@ Desafio 0: Eleccion de un DataSet
  
 Desafio 1: both_na()
 - both_na().R
+
+Desafio 2: Transformación de dataframe y sumarización agrupada
+- metabolicSyndrome Daruich.R

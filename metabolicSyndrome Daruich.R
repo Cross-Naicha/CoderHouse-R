@@ -2,6 +2,15 @@
 csv_file <- "metabolicSyndrome Daruich -data.csv"
 df <- read.csv(csv_file, sep=",", header = TRUE, stringsAsFactors = TRUE)
 
+sex_path <- "metabolicSyndrome Daruich -sexo.csv"
+sex_reference <- read.csv(sex_path, sep=",", header = TRUE, stringsAsFactors = TRUE)
+
+race_path <- "metabolicSyndrome Daruich -raza.csv"
+race_reference <- read.csv(race_path, sep=",", header = TRUE, stringsAsFactors = TRUE)
+
+marital_path <- "metabolicSyndrome Daruich -civil.csv"
+marital_reference <- read.csv(marital_path, sep=",", header = TRUE, stringsAsFactors = TRUE)
+
 # Estructura de los datos
 str(df)
 
@@ -107,7 +116,16 @@ df <- mutate(
   Hipertrigliceridemia = ifelse(TGL > 150, 1, 0),
   Dislipidemia = ifelse(((Sexo == "Male" & HDL < 40) | (Sexo == "Female" & HDL < 50)),1 ,0),
   Hiperglucemia = ifelse(Glucemia > 110, 1, 0),
-  Solitario = ifelse(Civil != 'Married', 1, 0)
+  Solitario = ifelse(Civil != 'Married', 1, 0),
+  Sexo = as.factor(df$Sexo),
+  Civil = as.factor(df$Civil),
+  Raza = as.factor(df$Raza),
+  `Sind. Metabolico` = as.factor(df$`Sind. Metabolico`),
+  `Circ. Abd. +` = as.factor(df$`Circ. Abd. +`),
+  Hipertrigliceridemia = as.factor(df$Hipertrigliceridemia),
+  Dislipidemia = as.factor(df$Dislipidemia),
+  Hiperglucemia = as.factor(df$Hiperglucemia),
+  Solitario = as.factor(df$Solitario)
 )
 
 # Retornando a la función FILTER
@@ -122,4 +140,13 @@ filter(
 df %>% group_by(Raza) %>% summarise(glucemia_promedio = mean(Glucemia)) %>% arrange(glucemia_promedio)
 df %>% group_by(Solitario) %>% summarise(count_Hiperglucemia = sum(Hiperglucemia == 1))
 
-unique(df$Civil) 
+
+str(df)
+# Cambios necesarios para poder practicar los JOIN
+marital_reference <- rename(
+  marital_reference,
+  Civil = Marital_ID,
+  Label = Marital
+)
+
+df %>% inner_join(marital_reference)
