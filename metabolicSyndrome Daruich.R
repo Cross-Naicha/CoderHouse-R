@@ -1,152 +1,219 @@
+# Cargando la librería
+library(dplyr)
+library(janitor)
+library(tidyverse)
+library(ggplot2)
+
 # Cargando los datos
 csv_file <- "metabolicSyndrome Daruich -data.csv"
 df <- read.csv(csv_file, sep=",", header = TRUE, stringsAsFactors = TRUE)
 
-sex_path <- "metabolicSyndrome Daruich -sexo.csv"
-sex_reference <- read.csv(sex_path, sep=",", header = TRUE, stringsAsFactors = TRUE)
-
-race_path <- "metabolicSyndrome Daruich -raza.csv"
-race_reference <- read.csv(race_path, sep=",", header = TRUE, stringsAsFactors = TRUE)
-
-marital_path <- "metabolicSyndrome Daruich -civil.csv"
-marital_reference <- read.csv(marital_path, sep=",", header = TRUE, stringsAsFactors = TRUE)
-
-# Estructura de los datos
-str(df)
-
-# Sumarizando
-summary(df)
-
-# Probando la función de Varianza
-variance <- function(x) {
-  n <- length(x)
-  mean <- mean(x, na.rm=TRUE)
-  sum_squares <- sum((x-mean)^2)
+# Información Estructural Pre-Wrangling
+estructura <- function(dataframe) {
+  num_filas <- nrow(dataframe)
+  num_colum <- ncol(dataframe)
+  nan <- sum(is.na(dataframe))
   
-  return(sum_squares/(n-1))
+  print(paste("El dataframe tiene", num_filas, "filas, y", num_colum, "columnas.", "Valores NA =", nan))
 }
 
-# Probando la función de la desviación estándar
-sd <- function(x) {
-  return(sqrt(variance(x)))
-}
+estructura(df)
 
-# Calculando la varianza y la desviación estándar de la edad
-variance(df$Age)
-sd(df$Age)
+# Reemplazando la columna "seqn" por un Indice
+df <- select(df, -seqn, -UrAlbCr) %>% 
+  mutate(Index = row_number()) %>%
+  clean_names()
 
-# Integrando en la función Master
-master <- function(x) {
-  var = variance(x)
-  sd = sd(x)
-  return(c(var, sd))
-}
-
-# Calculando master para edad
-master(df$Age)
-
-# Instalando la librería tidyverse
-# install.packages("tidyverse"): LISTO
-
-library(tidyverse)
-
-# Probando la función SELECT
-select(df,BMI)
-select(df,c(BMI,Sex))
-view(select(df,c(BMI,Sex,Age)))
-
-# Probando la función MUTATE (+ Actualizando el DF)
-df <- mutate(
-  df, 
-  Weight = ifelse(df$BMI > 35, "Morbid Obesity",
-                  ifelse(df$BMI > 30, "Obesity", 
-                  ifelse(df$BMI > 25, "Overweight", "Normal"
-                  )))
-)
-
-select(df, c(BMI, Weight))
-
-df <- mutate(
-  df,
-  Weight = as.factor(Weight),
-  Albuminuria = as.factor(Albuminuria)
-)
-
-# Probando la funcion GLIMPSE
-glimpse(df)
-
-# Probando la funcion TRANSMUTE
-company <- transmute(
-  df,
-  Marital = as.factor(df$Marital),
-  Alone = as.factor(ifelse(Marital == 'Married','No','Yes'))
-)
-
-glimpse(company)
-
-# Probando la funcion RENAME
+# Adecuando los nombres de todas las columnas
 df <- rename(
   df,
-  ID = seqn,
-  Edad = Age,
-  Sexo = Sex,
-  Civil = Marital,
-  Ingresos = Income,
-  Raza = Race,
-  "Circ. Abd." = WaistCirc,
-  IMC = BMI,
-  "Alb/Cr" = UrAlbCr,
-  Uricemia = UricAcid,
-  Glucemia = BloodGlucose,
-  TGL = Triglycerides,
-  "Sind. Metabolico" = MetabolicSyndrome,
-  Peso = Weight
+  edad = age,
+  sexo = sex,
+  civil = marital,
+  ingresos = income,
+  raza = race,
+  abdomen = waist_circ,
+  imc = bmi,
+  uricemia = uric_acid,
+  glucemia = blood_glucose,
+  trigliceridemia = triglycerides,
+  metabolico = metabolic_syndrome
 )
 
-# Probando la funcion FILTER
-filter(
-  df,
-  Glucemia > 126
-)
-
-# Retornando a la función MUTATE (cambios necesarios)
+# Codificando los valores de las variables
 df <- mutate(
   df,
-  "Circ. Abd. +" = ifelse(((Sexo == "Male" & `Circ. Abd.` > 102) | (Sexo == "Female" & `Circ. Abd.` > 88)),1,0),
-  Hipertrigliceridemia = ifelse(TGL > 150, 1, 0),
-  Dislipidemia = ifelse(((Sexo == "Male" & HDL < 40) | (Sexo == "Female" & HDL < 50)),1 ,0),
-  Hiperglucemia = ifelse(Glucemia > 110, 1, 0),
-  Solitario = ifelse(Civil != 'Married', 1, 0),
-  Sexo = as.factor(df$Sexo),
-  Civil = as.factor(df$Civil),
-  Raza = as.factor(df$Raza),
-  `Sind. Metabolico` = as.factor(df$`Sind. Metabolico`),
-  `Circ. Abd. +` = as.factor(df$`Circ. Abd. +`),
-  Hipertrigliceridemia = as.factor(df$Hipertrigliceridemia),
-  Dislipidemia = as.factor(df$Dislipidemia),
-  Hiperglucemia = as.factor(df$Hiperglucemia),
-  Solitario = as.factor(df$Solitario)
-)
+  sexo = recode(sexo, "Female" = 0, "Male" = 1),
+  civil = recode(civil, "Unknow" = 0, "Married" = 1, "Widowed" = 2, "Divorced" = 3, "Separated" = 4, "Single" = 5),
+  raza = recode(raza, "White" = 1, "Asian" = 2, "Black" = 3, "MexAmerican" = 4, "Hispanic" = 5, "Other" = 6)
+  )
 
-# Retornando a la función FILTER
-filter(
+# Creando columnas de criterios especificos
+df <- mutate(
   df,
-  Hiperglucemia == 1,
-  Hipertrigliceridemia == 1,
-  Dislipidemia == 1
+  central = ifelse(((sexo == 1 & abdomen > 102) | (sexo == 1 & abdomen > 88)),1,0),
+  etareo = ifelse(df$edad > 70, 6,
+           ifelse(df$edad > 60, 5,
+           ifelse(df$edad > 50, 4,
+           ifelse(df$edad > 40, 3,
+           ifelse(df$edad > 30, 2, 1))))),
+  peso = ifelse(df$imc > 35, 5,
+           ifelse(df$imc > 30, 4,
+           ifelse(df$imc > 25, 3,
+           ifelse(df$imc > 18.5, 2,1)))),
+  hipertrigliceridemia = ifelse(trigliceridemia > 150, 1, 0),
+  dislipidemia = ifelse(((sexo == 1 & hdl < 40) | (sexo == 0 & hdl < 50)),1 ,0),
+  hiperglucemia = ifelse(glucemia > 100, 1, 0),
+  hiperuricemia = ifelse(((sexo == 1 & uricemia > 6) | (sexo == 1 & uricemia > 7)),1 ,0)
 )
 
-# Probando la función GROUP BY
-df %>% group_by(Raza) %>% summarise(glucemia_promedio = mean(Glucemia)) %>% arrange(glucemia_promedio)
-df %>% group_by(Solitario) %>% summarise(count_Hiperglucemia = sum(Hiperglucemia == 1))
-
-
-str(df)
-# Cambios necesarios para poder practicar los JOIN
-marital_reference <- rename(
-  marital_reference,
-  Civil = Marital_ID,
-  Label = Marital
+# Reordenando las columnas
+df <- select(
+  df, index, sexo, raza, edad, etareo, civil, ingresos, abdomen, central, imc, peso, glucemia, hiperglucemia,
+  trigliceridemia, hipertrigliceridemia, hdl, dislipidemia, uricemia, hiperuricemia, albuminuria, metabolico
 )
 
-df %>% inner_join(marital_reference)
+# Transformando en factor (cuando corresponde)
+df <- mutate(
+  df,
+  sexo = as.factor(sexo),
+  etareo = as.factor(etareo),
+  raza = as.factor(raza),
+  civil = as.factor(civil),
+  central = as.factor(central),
+  peso = as.factor(peso),
+  hiperglucemia = as.factor(hiperglucemia),
+  hipertrigliceridemia = as.factor(hipertrigliceridemia),
+  dislipidemia = as.factor(dislipidemia),
+  hiperuricemia = as.factor(hiperuricemia),
+  albuminuria = as.factor(albuminuria),
+  metabolico = as.factor(metabolico)
+)
+
+# TODO Crear una función que resuma la creación de tablas de referencia
+# Creando tabla de referencia: edad
+grupos <- c(1,2,3,4,5,6)
+etiquetas <- c("20 - 30", "30 - 40", "40 - 50", "50 - 60", "60 - 70", "70 - 80")
+
+grupos <- as.factor(grupos)
+
+edad_ref <- data.frame(etareo = grupos, etiqueta_edad = etiquetas)
+
+# Creando tabla de referencia: sexo
+grupos <- c(0,1)
+etiquetas <- c("Mujer", "Hombre")
+
+grupos <- as.factor(grupos)
+
+sexo_ref <- data.frame(sexo = grupos, etiqueta_sexo = etiquetas)
+
+# Creando tabla de referencia: síndrome metabólico
+grupos <- c(0,1)
+etiquetas <- c("Ausente", "Presente")
+
+grupos <- as.factor(grupos)
+
+metabolico_ref <- data.frame(metabolico = grupos, etiqueta_metabolico = etiquetas)
+
+# Creando tabla de referencia: raza
+grupos <- c(1,2,3,4,5,6)
+etiquetas <- c("Caucasico", "Asiatico", "Africano", "Mex-Americano", "Hispano", "Otro")
+
+grupos <- as.factor(grupos)
+
+raza_ref <- data.frame(raza = grupos, etiqueta_raza = etiquetas)
+
+# Tratamiento de valores faltantes
+df_procesada <- na.omit(df)
+
+# Tratamiento de valores extremos
+remove_outliers <- function(column) {
+  Q1 <- quantile(column, 0.25)
+  Q3 <- quantile(column, 0.75)
+  IQR_value <- IQR(column)
+  
+  outliers <- column < (Q1 - 1.5 * IQR_value) | column > (Q3 + 1.5 * IQR_value)
+  
+  return(outliers)
+}
+
+# Pre-procesamiento Final 
+columnas <- c("abdomen", "imc", "glucemia", "trigliceridemia", "hdl", "uricemia")
+outliers <- apply(df_procesada[columnas], 2, remove_outliers)
+rows_to_remove <- apply(outliers, 1, any)
+df_procesada <- df_procesada[!rows_to_remove, ]
+
+# Información Estructural Post-Wrangling
+
+estructura(df_procesada)
+
+# Resumen de la información
+df_procesada %>% group_by(metabolico) %>% summarise("Mujer" = sum(sexo == 0),
+                                                    "Varon" = sum(sexo == 1),
+                                                    "Total" = n(),
+                                                    "CAB-P" = mean(abdomen),
+                                                    "GLU-P" = mean(glucemia),
+                                                    "TGL-P" = mean(trigliceridemia),
+                                                    "HDL-P" = mean(hdl),
+                                                     )
+
+# La edad se relaciona con la posibilidad de síndrome metabólico?
+edad_metabolico <- df_procesada %>% group_by(etareo) %>% 
+  summarise(positivos = sum(metabolico == 1) / n(), negativos = sum(metabolico == 0) / n())
+
+ggplot(data = edad_metabolico %>% inner_join(edad_ref)) +
+  geom_col(mapping = aes(x = etareo, y = positivos, fill = etiqueta_edad)) +
+    labs(title = "Edad & Sindrome Metabolico", x = "Grupo Etareo", y = "% Positivos") +
+        guides(fill = guide_legend(title = "Grupo Etareo"))
+
+# Alguno de los 2 sexos es determinante a la hora de padecer síndrome metabólico?
+sexo_metabolico <- df_procesada %>% 
+  inner_join(sexo_ref) %>%
+    group_by(etiqueta_sexo) %>% summarise(positivo = sum(metabolico == 1),
+                                                  negativo = sum(metabolico == 0),
+                                                    total = n(),
+                                                      positivo_tasa = positivo / total,
+                                                        negativo_tasa = negativo / total)
+
+ggplot(data = df_procesada %>% inner_join(sexo_ref) %>% inner_join(metabolico_ref)) +
+  geom_bar(mapping = aes(x = etiqueta_sexo, fill = etiqueta_metabolico), position = "fill") +
+    labs(title = "S. Metabolico, Edad y Sexo", x = "Grupo Etareo", y = "Frecuencia") +
+        guides(fill = guide_legend(title = "S. Metabolico"))
+
+# Y si ademas se tiene en cuenta la edad?
+ggplot(data = df_procesada %>% inner_join(edad_ref) %>% inner_join(metabolico_ref)) +
+  geom_bar(mapping = aes(x = etiqueta_edad, fill = etiqueta_metabolico), position = "fill") +
+    labs(title = "S. Metabolico & Edad", x = "Grupo Etareo", y = "Porcentaje %") +
+      guides(fill = guide_legend(title = "S. Metabolico"))
+
+# Que ocurre en el caso de la etnia?
+prevalencia_raza <- df_procesada %>% group_by(raza) %>% summarise("20-30" = sum(etareo == 1) / n(),
+                                                                  "30-40" = sum(etareo == 2) / n(),
+                                                                  "40-50" = sum(etareo == 3) / n(),
+                                                                  "50-60" = sum(etareo == 4) / n(),
+                                                                  "60-70" = sum(etareo == 5) / n(),
+                                                                  "70-80" = sum(etareo == 6) / n())
+
+prevalencia_raza_long <- pivot_longer(prevalencia_raza, cols = `20-30`:`70-80`, names_to = "Grupo Etareo", values_to = "Proporcion")
+
+ggplot(data = prevalencia_raza_long %>% inner_join(raza_ref), aes(x = as.factor(`Grupo Etareo`), y = Proporcion, group = raza, color = factor(etiqueta_raza))) +  
+  geom_line() + 
+    geom_point() +
+      labs(title = "Prevalencia por Raza y Edad", x = "Grupo Etareo", y = "Porcentaje %") +
+        guides(color = guide_legend(title = "Raza"))
+
+# El aumento de la grasa visceral abdominal se relaciona con hipertrigliceridemia?
+ggplot(data = df_procesada) +
+  geom_point(mapping = aes(x = trigliceridemia, y = abdomen, color = metabolico)) +
+    geom_smooth(method = "lm", formula = y ~ x, se = FALSE, mapping = aes(x = trigliceridemia, y = abdomen)) +
+      labs(title = "Grasa Visceral Abdominal & Trigliceridemia", x = "Trigliceridemia", y = "Circunferencia Abdominal") +
+        scale_color_manual(values = c("0" = "pink", "1" = "purple"), labels = c("Ausente", "Presente")) +
+          guides(color = guide_legend(title = "S. Metabolico"))
+
+# La hipertrigliceridemia se relaciona con hiperglucemia?
+ggplot(data = df_procesada) +
+  geom_point(mapping = aes(x = glucemia, y = trigliceridemia, color = metabolico)) +
+    geom_smooth(method = "lm", formula = y ~ x, se = FALSE, mapping = aes(x = glucemia, y = trigliceridemia)) +
+      labs(title = "Glucemia & Hipertrigliceridemia", x = "Glucemia [mg/dL]", y = "Trigliceridemia [mg/dL]") +
+        scale_color_manual(values = c("0" = "darkcyan", "1" = "darkblue"), labels = c("Ausente", "Presente")) +
+          guides(color = guide_legend(title = "S. Metabolico"))

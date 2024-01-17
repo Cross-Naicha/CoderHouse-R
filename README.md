@@ -16,3 +16,8 @@ Desafio 1: both_na()
 
 Desafio 2: Transformación de dataframe y sumarización agrupada
 - metabolicSyndrome Daruich.R
+
+Pre-entrega:
+- metabolicSyndrome Daruich.R (Codigo)
+- metabolicSyndrome Daruich.Rmd (MarkDown)
+- metabolicSyndrome Daruich.html (HTML)

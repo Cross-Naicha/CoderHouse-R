@@ -1,0 +1,349 @@
+---
+title: "Síndrome Metabólico"
+author: "Daruich, Nicolás Alberto"
+date: "2024-01-16"
+output: 
+  html_document:
+    theme: united
+    toc: true
+    toc_float:
+      smooth_scroll: true
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 14, fig.align = "center", fig.height = 7)
+```
+
+## Sobre la entrega
+
+-   Crear un **R Markdown**, utilizar tu dataset seleccionado. El reporte debe contener por lo menos una tabla que [*resulte de una sumarización agrupada*](#interesante) para mostrar un resumen interesante de la información.
+-   Generar por lo menos dos [visualizaciones](#visualizaciones) que permitan apreciar la relación entre dos o más variables del dataset con ggplot2.
+-   Definir una [función](#funcion) que describa las dimensiones del dataset como así también si existen datos NA, la función debe retornar un mensaje en la consola indicando número de filas, columnas y total de NAs si es que existen.
+    -   [Pre-Wrangling](#funcion1)
+    -   [Post-Wrangling](#funcion2)
+
+------------------------------------------------------------------------
+
+## Justificación
+
+1.  <u>Relevancia clínica</u>: El **síndrome metabólico** es un conjunto de condiciones médicas que aumentan el riesgo de **enfermedades cardiovasculares** y **diabetes tipo 2**. Al trabajar con un DataFrame que contenga datos relacionados con el síndrome metabólico, se podrá **explorar** y **analizar** información clínicamente relevante, lo que brindará una introducción práctica a la aplicación de R en el análisis de datos de salud.
+
+2.  <u>Aplicación práctica de R</u>: Proporciona la oportunidad de aplicar los conceptos y técnicas aprendidas en R a un contexto real. Esto incluye la **importación** de datos, **limpieza**, **manipulación** y **visualización**, habilidades esenciales para cualquier analista de datos.
+
+3.  <u>Multidisciplinario</u>: Al involucrar fenómenos médicos, nutricionales y de estilo de vida, combina varias disciplinas a través de las variables de interés. Por lo tanto, es una oportunidad de ingresar a la naturaleza interdisciplinaria del análisis de datos. La **integración disciplinaria** favorece ademas el desarrollo de habilidades transferibles.
+
+4.  <u>Motivación intrínseca</u>: Dado mi **interés personal** en la medicina.
+
+------------------------------------------------------------------------
+
+## Resúmen
+
+### Concepto
+
+El síndrome metabólico (SM) consiste en una **agrupación de alteraciones metabólicas** que confieren un elevado riesgo para desarrollar **enfermedades cardiovasculares** y **diabetes mellitus (DM) de tipo 2**.
+
+### Etiopatogenia
+
+Intervendrían un **exceso de grasa corporal**, especialmente **obesidad abdominal visceral**, y un estado de **resistencia a la insulina** (RI) en hígado, músculo y tejido adiposo.
+
+El aumento de grasa visceral en el abdomen provoca un **estado inflamatorio** persistente capaz de **inhibir la acción de la insulina**. Esto aumenta la síntesis y liberación de ácidos grasos, así como el depósito ectópico de grasa en hígado y músculo. La **hipertrigliceridemia** modifica la composición de las lipoproteínas HDL que se transforman en **partículas con mayor capacidad aterogénica.** El aumento de ácidos grasos en sangre, actuando en un círculo vicioso, potencia la RI interfiriendo en la captación de glucosa mediada por insulina.
+
+Mientras la célula beta pancreática sea capaz de mantener su función, la RI provocará un estado de **hiperinsulinismo compensador**, con lo que el metabolismo hidrocarbonado se conservará dentro de la normalidad; si la función insular llega a claudicar **inducirá la aparición de prediabetes o DM de tipo 2**.
+
+## Proyecto
+
+### Librerías
+
+```{r librerías, message=FALSE}
+# Cargando librerías
+library(dplyr)
+library(janitor)
+library(tidyverse)
+library(ggplot2)
+```
+
+### Funciones {#funcion}
+
+```{r show}
+# Funcion: Estructura del DF
+estructura <- function(dataframe) {
+  num_filas <- nrow(dataframe)
+  num_colum <- ncol(dataframe)
+  nan <- sum(is.na(dataframe))
+  
+  print(paste("El dataframe tiene", num_filas, "filas, y", num_colum, "columnas.", "Valores NA =", nan))
+}
+```
+
+### Preparación de los datos
+
+```{r preparación}
+# Cargando los datos
+csv_file <- "metabolicSyndrome Daruich -data.csv"
+df <- read.csv(csv_file, sep=",", header = TRUE, stringsAsFactors = TRUE)
+```
+
+```{r índice}
+# Reemplazando la columna "seqn" por un Indice
+df <- select(df, -seqn, -UrAlbCr) %>% 
+  mutate(Index = row_number()) %>%
+  clean_names()
+```
+
+```{r renombrando}
+# Adecuando los nombres de todas las columnas
+df <- rename(
+  df,
+  edad = age,
+  sexo = sex,
+  civil = marital,
+  ingresos = income,
+  raza = race,
+  abdomen = waist_circ,
+  imc = bmi,
+  uricemia = uric_acid,
+  glucemia = blood_glucose,
+  trigliceridemia = triglycerides,
+  metabolico = metabolic_syndrome
+)
+```
+
+```{r codificando}
+# Codificando los valores de las variables
+df <- mutate(
+  df,
+  sexo = recode(sexo, "Female" = 0, "Male" = 1),
+  civil = recode(civil, "Unknow" = 0, "Married" = 1, "Widowed" = 2, "Divorced" = 3, "Separated" = 4, "Single" = 5),
+  raza = recode(raza, "White" = 1, "Asian" = 2, "Black" = 3, "MexAmerican" = 4, "Hispanic" = 5, "Other" = 6)
+  )
+```
+
+```{r columnas_específicas}
+# Creando columnas de criterios específicos
+df <- mutate(
+  df,
+  central = ifelse(((sexo == 1 & abdomen > 102) | (sexo == 1 & abdomen > 88)),1,0),
+  etareo = ifelse(df$edad > 70, 6,
+           ifelse(df$edad > 60, 5,
+           ifelse(df$edad > 50, 4,
+           ifelse(df$edad > 40, 3,
+           ifelse(df$edad > 30, 2, 1))))),
+  peso = ifelse(df$imc > 35, 5,
+           ifelse(df$imc > 30, 4,
+           ifelse(df$imc > 25, 3,
+           ifelse(df$imc > 18.5, 2,1)))),
+  hipertrigliceridemia = ifelse(trigliceridemia > 150, 1, 0),
+  dislipidemia = ifelse(((sexo == 1 & hdl < 40) | (sexo == 0 & hdl < 50)),1 ,0),
+  hiperglucemia = ifelse(glucemia > 100, 1, 0),
+  hiperuricemia = ifelse(((sexo == 1 & uricemia > 6) | (sexo == 1 & uricemia > 7)),1 ,0)
+)
+```
+
+```{r reordenamiento}
+# Reordenando las columnas
+df <- select(
+  df, index, sexo, raza, edad, etareo, civil, ingresos, abdomen, central, imc, peso, glucemia, hiperglucemia,
+  trigliceridemia, hipertrigliceridemia, hdl, dislipidemia, uricemia, hiperuricemia, albuminuria, metabolico
+)
+```
+
+```{r factorizando}
+# Transformando en factor (cuando corresponde)
+df <- mutate(
+  df,
+  sexo = as.factor(sexo),
+  etareo = as.factor(etareo),
+  raza = as.factor(raza),
+  civil = as.factor(civil),
+  central = as.factor(central),
+  peso = as.factor(peso),
+  hiperglucemia = as.factor(hiperglucemia),
+  hipertrigliceridemia = as.factor(hipertrigliceridemia),
+  dislipidemia = as.factor(dislipidemia),
+  hiperuricemia = as.factor(hiperuricemia),
+  albuminuria = as.factor(albuminuria),
+  metabolico = as.factor(metabolico)
+)
+```
+
+#### <u> Estructura **PRE**-Wranglin </u> {#funcion1}
+
+```{r estructura pre-wrangling}
+estructura(df)
+```
+
+### Tratamiento de valores extraordinarios
+
+```{r valores faltantes}
+# Tratamiento de valores faltantes
+df_procesada <- na.omit(df)
+```
+
+```{r valores extremos}
+# Tratamiento de valores extremos
+remove_outliers <- function(column) {
+  Q1 <- quantile(column, 0.25)
+  Q3 <- quantile(column, 0.75)
+  IQR_value <- IQR(column)
+  
+  outliers <- column < (Q1 - 1.5 * IQR_value) | column > (Q3 + 1.5 * IQR_value)
+  
+  return(outliers)
+}
+
+columnas <- c("abdomen", "imc", "glucemia", "trigliceridemia", "hdl", "uricemia")
+outliers <- apply(df_procesada[columnas], 2, remove_outliers)
+rows_to_remove <- apply(outliers, 1, any)
+df_procesada <- df_procesada[!rows_to_remove, ]
+```
+
+#### <u> Estructura **POST**-Wranglin </u> {#funcion2}
+
+```{r estructura post-wrangling}
+estructura(df_procesada)
+```
+
+### Creación de Tablas de Referencia
+
+```{r referencia_edad}
+# Creando tabla de referencia: edad
+grupos <- c(1,2,3,4,5,6)
+etiquetas <- c("20 - 30", "30 - 40", "40 - 50", "50 - 60", "60 - 70", "70 - 80")
+
+grupos <- as.factor(grupos)
+
+edad_ref <- data.frame(etareo = grupos, etiqueta_edad = etiquetas)
+```
+
+```{r referencia_sexo}
+# Creando tabla de referencia: sexo
+grupos <- c(0,1)
+etiquetas <- c("Mujer", "Hombre")
+
+grupos <- as.factor(grupos)
+
+sexo_ref <- data.frame(sexo = grupos, etiqueta_sexo = etiquetas)
+```
+
+```{r referencia_metabolico}
+# Creando tabla de referencia: síndrome metabólico
+grupos <- c(0,1)
+etiquetas <- c("Ausente", "Presente")
+
+grupos <- as.factor(grupos)
+
+metabolico_ref <- data.frame(metabolico = grupos, etiqueta_metabolico = etiquetas)
+```
+
+```{r referencia_raza}
+# Creando tabla de referencia: raza
+grupos <- c(1,2,3,4,5,6)
+etiquetas <- c("Caucasico", "Asiatico", "Africano", "Mex-Americano", "Hispano", "Otro")
+
+grupos <- as.factor(grupos)
+
+raza_ref <- data.frame(raza = grupos, etiqueta_raza = etiquetas)
+```
+
+### Tabla Interesante (?) {#interesante}
+
+```{r tabla_interesante}
+# Resumen de la información
+df_procesada %>% group_by(metabolico) %>% summarise("Mujer" = sum(sexo == 0),
+                                                    "Varon" = sum(sexo == 1),
+                                                    "Total" = n(),
+                                                    "CAB-P" = mean(abdomen),
+                                                    "GLU-P" = mean(glucemia),
+                                                    "TGL-P" = mean(trigliceridemia),
+                                                    "HDL-P" = mean(hdl),
+                                                     )
+```
+
+Referencia:
+
+-   CAB-P: Circunferencia Abdominal Promedio.
+-   GLU-P: Glucemia Promedio;
+-   TGL-P: Trigliceridemia Promedio.
+-   HDL-P: High-Density-Lipoprotein Promedio (Colesterol "Bueno").
+
+### Analisis Bivariados
+
+#### La edad se relaciona con la posibilidad de síndrome metabólico?
+
+```{r edad_metabolico}
+edad_metabolico <- df_procesada %>% group_by(etareo) %>% 
+  summarise(positivos = sum(metabolico == 1) / n(), negativos = sum(metabolico == 0) / n())
+
+ggplot(data = edad_metabolico %>% inner_join(edad_ref)) +
+  geom_col(mapping = aes(x = etareo, y = positivos, fill = etiqueta_edad)) +
+    labs(title = "Edad & Sindrome Metabolico", x = "Grupo Etareo", y = "% Positivos") +
+        guides(fill = guide_legend(title = "Grupo Etareo"))
+```
+
+#### Alguno de los 2 sexos es determinante a la hora de padecer síndrome metabólico?
+
+```{r sexo_metabolico}
+sexo_metabolico <- df_procesada %>% 
+  inner_join(sexo_ref) %>%
+    group_by(etiqueta_sexo) %>% summarise(positivo = sum(metabolico == 1),
+                                                  negativo = sum(metabolico == 0),
+                                                    total = n(),
+                                                      positivo_tasa = positivo / total,
+                                                        negativo_tasa = negativo / total)
+
+ggplot(data = df_procesada %>% inner_join(sexo_ref) %>% inner_join(metabolico_ref)) +
+  geom_bar(mapping = aes(x = etiqueta_sexo, fill = etiqueta_metabolico), position = "fill") +
+    labs(title = "S. Metabolico & Sexo", x = "Grupo Etareo", y = "Frecuencia") +
+        guides(fill = guide_legend(title = "S. Metabolico"))
+```
+
+#### Y si se tiene en cuenta la edad?
+
+```{r metabolico_edad}
+ggplot(data = df_procesada %>% inner_join(edad_ref) %>% inner_join(metabolico_ref)) +
+  geom_bar(mapping = aes(x = etiqueta_edad, fill = etiqueta_metabolico), position = "fill") +
+    labs(title = "S. Metabolico & Edad", x = "Grupo Etareo", y = "Porcentaje %") +
+      guides(fill = guide_legend(title = "S. Metabolico"))
+```
+
+#### Que ocurre en el caso de la etnia?
+
+```{r etnia_edad_metabolico}
+incidencia_raza <- df_procesada %>% group_by(raza) %>% summarise("20-30" = sum(etareo == 1) / n(),
+                                                                 "30-40" = sum(etareo == 2) / n(),
+                                                                 "40-50" = sum(etareo == 3) / n(),
+                                                                 "50-60" = sum(etareo == 4) / n(),
+                                                                 "60-70" = sum(etareo == 5) / n(),
+                                                                 "70-80" = sum(etareo == 6) / n())
+
+incidencia_raza_long <- pivot_longer(incidencia_raza, cols = `20-30`:`70-80`, names_to = "Grupo Etareo", values_to = "Proporcion")
+
+ggplot(data = incidencia_raza_long %>% inner_join(raza_ref), aes(x = as.factor(`Grupo Etareo`), y = Proporcion, group = raza, color = factor(etiqueta_raza))) +  
+  geom_line() + 
+    geom_point() +
+      labs(title = "Incidencia por Raza y Edad", x = "Grupo Etareo", y = "Porcentaje %") +
+        guides(color = guide_legend(title = "Raza"))
+```
+
+#### El aumento de la grasa visceral abdominal se relaciona con trigliceridemia?
+
+```{r circunferencia_trigliceridemia}
+ggplot(data = df_procesada) +
+  geom_point(mapping = aes(x = trigliceridemia, y = abdomen, color = metabolico)) +
+    geom_smooth(method = "lm", formula = y ~ x, se = FALSE, mapping = aes(x = trigliceridemia, y = abdomen)) +
+      labs(title = "Grasa Visceral Abdominal & Trigliceridemia", x = "Trigliceridemia", y = "Circunferencia Abdominal") +
+        scale_color_manual(values = c("0" = "pink", "1" = "purple"), labels = c("Ausente", "Presente")) +
+          guides(color = guide_legend(title = "S. Metabolico"))
+```
+
+#### La trigliceridemia se relaciona con glucemia?
+
+```{r trigliceridemia_glucemia}
+ggplot(data = df_procesada) +
+  geom_point(mapping = aes(x = glucemia, y = trigliceridemia, color = metabolico)) +
+    geom_smooth(method = "lm", formula = y ~ x, se = FALSE, mapping = aes(x = glucemia, y = trigliceridemia)) +
+      labs(title = "Glucemia & Hipertrigliceridemia", x = "Glucemia [mg/dL]", y = "Trigliceridemia [mg/dL]") +
+        scale_color_manual(values = c("0" = "darkcyan", "1" = "darkblue"), labels = c("Ausente", "Presente")) +
+          guides(color = guide_legend(title = "S. Metabolico"))
+```
