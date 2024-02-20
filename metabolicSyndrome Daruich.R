@@ -3,6 +3,9 @@ library(dplyr)
 library(janitor)
 library(tidyverse)
 library(ggplot2)
+library(tidymodels)
+library(factoextra)
+library(cluster)
 
 # Cargando los datos
 csv_file <- "metabolicSyndrome Daruich -data.csv"
@@ -51,7 +54,7 @@ df <- mutate(
 # Creando columnas de criterios especificos
 df <- mutate(
   df,
-  central = ifelse(((sexo == 1 & abdomen > 102) | (sexo == 1 & abdomen > 88)),1,0),
+  central = ifelse(((sexo == 1 & abdomen > 102) | (sexo == 0 & abdomen > 88)),1,0),
   etareo = ifelse(df$edad > 70, 6,
            ifelse(df$edad > 60, 5,
            ifelse(df$edad > 50, 4,
@@ -64,7 +67,7 @@ df <- mutate(
   hipertrigliceridemia = ifelse(trigliceridemia > 150, 1, 0),
   dislipidemia = ifelse(((sexo == 1 & hdl < 40) | (sexo == 0 & hdl < 50)),1 ,0),
   hiperglucemia = ifelse(glucemia > 100, 1, 0),
-  hiperuricemia = ifelse(((sexo == 1 & uricemia > 6) | (sexo == 1 & uricemia > 7)),1 ,0)
+  hiperuricemia = ifelse(((sexo == 0 & uricemia > 6) | (sexo == 1 & uricemia > 7)),1 ,0)
 )
 
 # Reordenando las columnas
@@ -217,3 +220,112 @@ ggplot(data = df_procesada) +
       labs(title = "Glucemia & Hipertrigliceridemia", x = "Glucemia [mg/dL]", y = "Trigliceridemia [mg/dL]") +
         scale_color_manual(values = c("0" = "darkcyan", "1" = "darkblue"), labels = c("Ausente", "Presente")) +
           guides(color = guide_legend(title = "S. Metabolico"))
+
+### Clusters ###
+
+## Pre-procesamiento
+# Separando el dataframe en 3 subetapas: Variables No-Modificables, Modificables (cuantitativas) y Modificables (cualitativas)
+
+# Variables No-Modificables (Aquellas sobre las cuales los individuos no tienen influencia)
+# (Sexo, Edad/Etáreo, Raza)
+sub_df_inmodificable <- df_procesada %>%
+  select(index, sexo, edad, etareo, raza)
+
+# Codificación de Variables Categóricas: Sexo
+sub_df_inmodificable_encoded_sexos <- model.matrix(~ index + sexo - 1, sub_df_inmodificable) %>%
+  as.data.frame() 
+
+colnames(sub_df_inmodificable_encoded_sexos) <- c("index", "mujer", "hombre")
+
+# Codificación de Variables Categóricas: Raza
+sub_df_inmodificable_encoded_razas <- model.matrix(~ index + raza - 1, sub_df_inmodificable) %>%
+  as.data.frame() 
+
+colnames(sub_df_inmodificable_encoded_razas) <- c("index", "caucasico", "asiatico", "africano", "mex-americano", "hispano", "otro")
+
+# Combinando las consultas tras la codificación
+sub_df_inmodificable_encoded <- inner_join(sub_df_inmodificable_encoded_sexos, sub_df_inmodificable_encoded_razas, by = "index") %>%
+  inner_join(sub_df_inmodificable %>% select(index, edad)) %>% as.data.frame()
+
+# Variables Modificables (Cuantitativas) + Escalado de las variables
+sub_df_mod_cuan <- df_procesada %>%
+  select(abdomen, imc, glucemia, trigliceridemia, hdl, uricemia) %>%
+    scale() %>% as.data.frame()
+# Agregando la columna indice
+sub_df_mod_cuan$index <- seq(nrow(sub_df_mod_cuan))
+
+# Variables Modificables, Cualitativas
+sub_df_mod_cual <- df_procesada %>%
+  select(index, central, peso, hiperglucemia, hipertrigliceridemia, dislipidemia, hiperuricemia)
+
+# Primera Aproximación: Solo VAR Modificables Cuantitativas
+
+# Visualización bivariada (glucemia + trigliceridemia) con la etiqueta de clasificación incluida
+ggplot(df_procesada, aes(x = glucemia, y = trigliceridemia, colour = metabolico)) +
+  geom_point() +
+    labs(title = "Glucemia & Trigliceridemia", x = "Glucemia [mg/dL]", y = "Trigliceridemia [mg/dL]") +
+      scale_color_manual(values = c("0" = "darkcyan", "1" = "darkblue"), labels = c("Ausente", "Presente")) +
+        guides(color = guide_legend(title = "S. Metabolico"))
+
+# Combinando las consultas de interés: No-Modificables + Modificables Continuas
+df_mod_plus_continual <- inner_join(sub_df_inmodificable_encoded, sub_df_mod_cuan, by = "index")
+
+# Combinando las consultas de interés: No-Modificables + Modificables Continuas
+df_mod_plus_categorical <- inner_join(sub_df_inmodificable_encoded, sub_df_mod_cual, by = "index")
+
+# Iterando para encontrar el numero de clusteres ideal (métricas de error mínimas)
+kclusts <- tibble(k = 2:5) %>%
+  mutate(
+    kclust = map(k, ~ kmeans(df_mod_plus_continual, .x)),
+    tidied = map(kclust, tidy),
+    glanced = map(kclust, glance),
+    augmented = map(kclust, augment, df_mod_plus_continual)
+  )
+
+# Desanidando los resultados: clusters
+clusters <- kclusts %>%
+  unnest(cols = c(tidied)) %>%
+  select(-c(glanced, augmented, kclust))
+
+# Desanidando los resultados: predicciones
+predicciones <- kclusts %>%
+  unnest(cols = c(augmented)) %>%
+  select(k, abdomen, imc, glucemia, trigliceridemia, hdl, uricemia, .cluster)
+
+# Desanidando los resultados: resumen
+resumen <- kclusts %>%
+  unnest(cols = c(glanced)) %>%
+  select(-c(kclust, tidied, augmented))
+
+# Graficando las posibilidades
+ggplot(predicciones, aes(x = glucemia, y = trigliceridemia)) +
+  geom_point(aes(color = .cluster), alpha = 0.8) +
+    geom_point(data = clusters, size = 5, shape = "+") +
+      facet_wrap(~ k) + 
+        theme_bw()
+
+# Graficando la métrica WithinSS a valores crecientes de K
+ggplot(resumen, aes(x = k, y = tot.withinss)) +
+  scale_x_discrete(name = "k", limits = c(2:9)) +
+    geom_point() +
+      geom_line () +
+        theme_bw()
+
+# Generando una matriz de distancia
+sub_df_mod_cuan_dist <- sub_df_mod_cuan %>% # Se crea la matriz de distancia sobre el df estandarizado
+  dist()
+
+# Logrando el modelo de clusterizacion jerárquica
+hc <- hclust(sub_df_mod_cuan_dist, method = "complete") # El primer argumento es la matriz de distancia
+
+# Visualización gráfica: dendograma
+plot(hc)
+rect.hclust(hc, k = 2, border = 3:4) # (modelo, clusters, colores)
+
+# "Cortando" el árbol para facilitar su visualización
+clusters <- cutree(hc, k = 2) # Dado que son 2 los grupos objetivo (positivo y negativo para SM)
+cj_results <- table(clusters, df_procesada$metabolico) # Comparando los grupos resultantes: dendograma vs. datos originales
+
+cj_results_df <- as.data.frame(cj_results)
+
+cj_results_df$Freq[[1]]

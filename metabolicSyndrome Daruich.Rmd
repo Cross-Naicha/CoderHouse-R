@@ -1,7 +1,7 @@
 ---
 title: "Síndrome Metabólico"
 author: "Daruich, Nicolás Alberto"
-date: "2024-01-16"
+date: "2024-02-07"
 output: 
   html_document:
     theme: united
@@ -15,13 +15,15 @@ output:
 knitr::opts_chunk$set(echo = TRUE, fig.width = 14, fig.align = "center", fig.height = 7)
 ```
 
-## Sobre la entrega
+## Sobre las entregas
 
--   Crear un **R Markdown**, utilizar tu dataset seleccionado. El reporte debe contener por lo menos una tabla que [*resulte de una sumarización agrupada*](#interesante) para mostrar un resumen interesante de la información.
--   Generar por lo menos dos [visualizaciones](#visualizaciones) que permitan apreciar la relación entre dos o más variables del dataset con ggplot2.
--   Definir una [función](#funcion) que describa las dimensiones del dataset como así también si existen datos NA, la función debe retornar un mensaje en la consola indicando número de filas, columnas y total de NAs si es que existen.
-    -   [Pre-Wrangling](#funcion1)
-    -   [Post-Wrangling](#funcion2)
+1er DESAFÍO:\
+- Crear un **R Markdown**, utilizar tu dataset seleccionado. El reporte debe contener por lo menos una tabla que [*resulte de una sumarización agrupada*](#interesante) para mostrar un resumen interesante de la información. - Generar por lo menos dos [visualizaciones](#visualizaciones) que permitan apreciar la relación entre dos o más variables del dataset con ggplot2.\
+- Definir una [función](#funcion) que describa las dimensiones del dataset como así también si existen datos NA, la función debe retornar un mensaje en la consola indicando número de filas, columnas y total de NAs si es que existen. - [Pre-Wrangling](#funcion1)\
+- [Post-Wrangling](#funcion2)
+
+2do DESAFÍO:\
+- [Análisis de Componentes Principales](#pca)
 
 ------------------------------------------------------------------------
 
@@ -61,6 +63,11 @@ library(dplyr)
 library(janitor)
 library(tidyverse)
 library(ggplot2)
+library(tidymodels)
+library(factoextra)
+library(cluster)
+library(psych)
+library(ggbiplot)
 ```
 
 ### Funciones {#funcion}
@@ -123,7 +130,7 @@ df <- mutate(
 # Creando columnas de criterios específicos
 df <- mutate(
   df,
-  central = ifelse(((sexo == 1 & abdomen > 102) | (sexo == 1 & abdomen > 88)),1,0),
+  central = ifelse(((sexo == 1 & abdomen > 102) | (sexo == 0 & abdomen > 88)),1,0),
   etareo = ifelse(df$edad > 70, 6,
            ifelse(df$edad > 60, 5,
            ifelse(df$edad > 50, 4,
@@ -136,7 +143,7 @@ df <- mutate(
   hipertrigliceridemia = ifelse(trigliceridemia > 150, 1, 0),
   dislipidemia = ifelse(((sexo == 1 & hdl < 40) | (sexo == 0 & hdl < 50)),1 ,0),
   hiperglucemia = ifelse(glucemia > 100, 1, 0),
-  hiperuricemia = ifelse(((sexo == 1 & uricemia > 6) | (sexo == 1 & uricemia > 7)),1 ,0)
+  hiperuricemia = ifelse(((sexo == 0 & uricemia > 6) | (sexo == 1 & uricemia > 7)),1 ,0)
 )
 ```
 
@@ -281,6 +288,8 @@ ggplot(data = edad_metabolico %>% inner_join(edad_ref)) +
         guides(fill = guide_legend(title = "Grupo Etareo"))
 ```
 
+Se puede observar que la proporción de pacientes afectados aumenta con la edad, por lo que la posibilidad de dicha correlación es sensata.
+
 #### Alguno de los 2 sexos es determinante a la hora de padecer síndrome metabólico?
 
 ```{r sexo_metabolico}
@@ -298,14 +307,7 @@ ggplot(data = df_procesada %>% inner_join(sexo_ref) %>% inner_join(metabolico_re
         guides(fill = guide_legend(title = "S. Metabolico"))
 ```
 
-#### Y si se tiene en cuenta la edad?
-
-```{r metabolico_edad}
-ggplot(data = df_procesada %>% inner_join(edad_ref) %>% inner_join(metabolico_ref)) +
-  geom_bar(mapping = aes(x = etiqueta_edad, fill = etiqueta_metabolico), position = "fill") +
-    labs(title = "S. Metabolico & Edad", x = "Grupo Etareo", y = "Porcentaje %") +
-      guides(fill = guide_legend(title = "S. Metabolico"))
-```
+Desde una perspectiva gráfica, no parece haber un sexo predominante.
 
 #### Que ocurre en el caso de la etnia?
 
@@ -326,6 +328,10 @@ ggplot(data = incidencia_raza_long %>% inner_join(raza_ref), aes(x = as.factor(`
         guides(color = guide_legend(title = "Raza"))
 ```
 
+En la primera mitad del gráfico, puede interpretarse que existe una mayor tendencia al síndrome. Esto puede explicarse, sin ahondar en una análisis estadístico, por la escasa representación de los grupos "no-caucásicos"; de hecho, se puede observar como dicho grupo inicia con una proporción baja. La baja representación de los grupos minoritarios podría dar lugar a una sobre-representación de personas afectadas por el síndrome.
+
+Algo similar podría ocurrir en la segunda mitad, pero al revés. Pese a todo, también es factible que la reducción de la incidencia en grupos minoritarios se deba a que efectivamente cuentan con un factor protector, o bien, no cuentan con el factor de riesgo que si estaría presente en el grupo caucásico.
+
 #### El aumento de la grasa visceral abdominal se relaciona con trigliceridemia?
 
 ```{r circunferencia_trigliceridemia}
@@ -337,6 +343,8 @@ ggplot(data = df_procesada) +
           guides(color = guide_legend(title = "S. Metabolico"))
 ```
 
+Existe una leve-moderada correlación positiva entre ambas variables.
+
 #### La trigliceridemia se relaciona con glucemia?
 
 ```{r trigliceridemia_glucemia}
@@ -347,3 +355,247 @@ ggplot(data = df_procesada) +
         scale_color_manual(values = c("0" = "darkcyan", "1" = "darkblue"), labels = c("Ausente", "Presente")) +
           guides(color = guide_legend(title = "S. Metabolico"))
 ```
+
+Existe una leve-moderada correlación positiva entre ambas variables.
+
+### Clústeres
+
+En este segmento se probaran diferentes modelos de aprendizaje automático. Se evaluara cual se ajusta mejor a los datos etiquetados, y se intentara justificar que dicha clasificación no necesariamente sera la única útil en el contexto del síndrome.
+
+#### Pre-Procesamiento
+
+Se aplicara sobre una porción del DF (el proceso de estandarización)
+
+```{r Estandarizan de un subgrupo de variables cuantitativas}
+# Estandarizan de un subgrupo de variables cuantitativas
+sub_df_mod_cuan <- df_procesada %>%
+  select(abdomen, imc, glucemia, trigliceridemia, hdl, uricemia) %>%
+    scale() %>% as.data.frame()
+```
+
+#### Aplicando el modelo K-Means
+
+En este caso, se partirá de la idea de desconocer el numero de grupos pre-establecidos, para reconocer potencial nueva información. En otras palabras, se permitirá al modelo encontrar el mejor numero de clusteres en función del cambio de variabilidad intra-grupo (WithinSS).
+
+```{r Aplicación del modelo k-Means}
+# Iterando para encontrar el numero de clusteres ideal
+kclusts <- tibble(k = 2:10) %>%
+  mutate(
+    kclust = map(k, ~ kmeans(sub_df_mod_cuan, .x)),
+    tidied = map(kclust, tidy),
+    glanced = map(kclust, glance),
+    augmented = map(kclust, augment, sub_df_mod_cuan)
+  )
+
+# Desanidando los resultados: clusters
+clusters <- kclusts %>%
+  unnest(cols = c(tidied)) %>%
+  select(-c(glanced, augmented, kclust))
+
+# Desanidando los resultados: predicciones
+predicciones <- kclusts %>%
+  unnest(cols = c(augmented)) %>%
+  select(k, abdomen, imc, glucemia, trigliceridemia, hdl, uricemia, .cluster)
+
+# Desanidando los resultados: resumen
+resumen <- kclusts %>%
+  unnest(cols = c(glanced)) %>%
+  select(-c(kclust, tidied, augmented))
+
+# Graficando las posibilidades
+ggplot(predicciones, aes(x = glucemia, y = trigliceridemia)) +
+  geom_point(aes(color = .cluster), alpha = 0.8) +
+    geom_point(data = clusters, size = 5, shape = "+") +
+      facet_wrap(~ k) + 
+        theme_bw()
+```
+
+Si bien el objetivo es lograr 2 grupos (positivos y negativos para síndrome metabólico), la realidad es que la medicina podría beneficiarse de subclasificaciones: dado que el síndrome es un continuo, no todos los pacientes podrían necesitar el mismo tratamiento (por ej, las mismas dosis de fármacos). Por lo tanto, la nueva clusterizacion podría aumentar la eficiencia (beneficio en función del costo) del enfoque diagnostico y terapéutico de esta alteración metabólica.
+
+```{r K-Means: WithinSS para valores crecientes de K}
+# Graficando la métrica WithinSS a valores crecientes de K
+ggplot(resumen, aes(x = k, y = tot.withinss)) +
+  scale_x_discrete(name = "k", limits = c(2:10)) +
+    geom_point() +
+      geom_line () +
+        theme_bw()
+```
+
+A pesar de lo anterior, la necesidad de nuevos grupos empieza a tornarse menos relevante a partir de k = 3, ya que entre este y k = 2 es donde se observa la mayor caída de la métrica WithinSS (es decir, la variabilidad intragrupo).
+
+```{r K-Means: Graficando el mejor k logrado}
+# Indicando el numero de clusters de interés
+kclust <- kmeans(sub_df_mod_cuan, centers = 3)
+
+# Indicando el cluster asignado, y la distancia de cada variable con el centroide del mismo
+augment(kclust, sub_df_mod_cuan)
+# Graficando 
+ggplot(augment(kclust, sub_df_mod_cuan), aes(x = glucemia, y = trigliceridemia)) +
+  geom_point(aes(color = .cluster), alpha = 0.8) +
+    geom_point(data = tidy(kclust), size = 5, shape = "+")
+```
+
+#### Aplicando el modelo de Clusterización Jerarquica
+
+En este caso, se probara el modelo de clusterizacion jerarquica en busca de la capacidad del algoritmo para lograr la clasificacion pre-establecida (positivos y negativos para sindrome metabolico).
+
+```{r Aplicando el modelo de clusterizacion jerarquica}
+# Generando una matriz de distancia
+sub_df_mod_cuan_dist <- sub_df_mod_cuan %>% # Se crea la matriz de distancia sobre el df estandarizado
+  dist()
+
+# Logrando el modelo de clusterizacion jerárquica
+hc <- hclust(sub_df_mod_cuan_dist, method = "complete") # El primer argumento es la matriz de distancia
+
+# Visualización gráfica: dendograma
+plot(hc)
+rect.hclust(hc, k = 2, border = 3:4) # (modelo, clusters, colores)
+```
+
+En este caso buscamos comparar la precisión del modelo: por lo tanto, se contrastaran los datos modelados con los datos originales.
+
+```{r CJ: Comparando datos modelados con los originales}
+# "Cortando" el árbol para facilitar su visualización
+clusters <- cutree(hc, k = 2) # Dado que son 2 los grupos objetivo (positivo y negativo para SM)
+cj_results <- table(clusters, df_procesada$metabolico) # Comparando los grupos resultantes: dendograma vs. datos originales
+
+cj_results_table <- as.data.frame(cj_results)
+
+negatives <- cj_results_table$Freq[[1]]
+false_negatives <- cj_results_table$Freq[[2]]
+false_positives <- cj_results_table$Freq[[3]]
+positives <- cj_results_table$Freq[[4]]
+
+total_1 <- negatives + false_negatives
+total_2 <- positives + false_positives
+negatives_per <- negatives / (negatives + false_negatives)
+positives_per <- positives / (positives + false_positives)
+
+cj_results
+```
+
+En este primer análisis por jerarquización, observamos:
+
+| Clúster       | Acierto       | \% Acierto        | Error               | Total       |
+|---------------|---------------|---------------|---------------|---------------|
+| 1 (Negativos) | `r negatives` | `r negatives_per` | `r false_positives` | `r total_1` |
+| 2 (Positivos) | `r positives` | `r positives_per` | `r false_negatives` | `r total_2` |
+
+Se repetira el modelado, pero cambiando los hiperparametros de clusterizacion:
+
+```{r HC: Probando diferentes hiperparametros}
+# Probando diferentes métodos de clusterizacion
+
+# Creando la lista de métodos a iterar
+cluster_method <- c("average", "single", "complete", "ward")
+names(cluster_method) <- cluster_method
+
+# Creando una lista con los resultados de los diferentes métodos de clusterizacion
+hc_list <- purrr::map(
+  .x = cluster_method, # lista de métodos sobre los cuales iterar
+  .f = function(x) {
+    agnes(sub_df_mod_cuan_dist, method = x) # función que tomara el método de la lista de métodos
+  }
+)
+```
+
+| Hiperparametro de Clasificación | Coeficiente Aglomerativos |
+|---------------------------------|---------------------------|
+| Average                         | `r hc_list$average$ac`    |
+| Single                          | `r hc_list$single$ac`     |
+| Complete                        | `r hc_list$complete$ac`   |
+| Ward                            | `r hc_list$ward$ac`       |
+
+Se puede observar como el método Ward es el de mejor rendimiento. Por lo tanto se procede a rehacer el modelado utilizando dicho hiperparametro:
+
+```{r Re-aplicando el modelo de HC: Hiperparametro mas eficiente}
+# Repito el modelado con el hiperparámetro mas preciso (en este caso, $Ward)
+hc_ward <- hcut(sub_df_mod_cuan_dist, k = 2, hc_method = "ward.D2")
+plot(hc_ward)
+rect.hclust(hc_ward, k = 2, border = 1:2)
+```
+
+```{r CJ: Re-comparando datos modelados con los originales}
+# Comparando el resultado de la clusterizacion con los datos etiquetados
+table(hc_ward$cluster, df_procesada$metabolico)
+```
+
+### Análisis de Componente Principal (PCA) {#pca}
+
+Si bien el número de columnas con las que cuenta el set de datos es escasa, en el análisis fisiopatológico es valido suponer que existe colinealidad y multicolinealidad entre las variables (ej, la hipertrigliceridemia esta correlacionada positivamente con la hiperglucemia).
+
+Para reducir el ruido que puede introducir en el modelado de datos, se aplicaran técnicas de Análisis de Componente Principal. Esto además facilitara la proyección del conjunto de datos en gráficos bidimensionales que resuman, si el análisis así lo determina, las características de los mismos.
+
+```{r PCA}
+colnames(sub_df_mod_cuan)
+
+pca_metabolic <- sub_df_mod_cuan %>% 
+  prcomp(., center = TRUE, scale = FALSE) # Evitando el escalado, ya que los datos ya lo están.
+
+pca_metabolic_summary <- summary(pca_metabolic)
+```
+
+En este caso, los 2 primeros componentes principales explican el \~ 65% de la varianza. Esto queda explicito en el siguiente grafico:
+
+#### Scree Plot
+
+```{r PCA: Scree Plot}
+# Autovalores y Autovectores
+autovectores <- pca_metabolic$rotation
+
+autovalores <- pca_metabolic$sdev * pca_metabolic$sdev
+# Eigenvalues (promedio de SS(distancia) para cada PCA)
+# Para lograrlos, hay que potenciar los Singular Value (equivalente a la sdev)
+
+# Calculo del porcentaje explicado
+pca_var_pct <- round(autovalores / sum(autovalores) * 100, digits = 2)
+barplot(pca_var_pct, main = "Scree Plot para Sind. Metabólico", xlab = "Componente Principal", ylab = "Variación Porcentual")
+```
+
+#### Scatter Plot
+
+```{r PCA: Scatter Plot}
+# Calculo del porcentaje explicado
+pca_var_pct <- round(autovalores / sum(autovalores) * 100, digits = 2)
+
+# Creando el modelo para el gráfico
+pca_data <- data.frame(
+  row_names = rownames(pca_metabolic$x),
+  x = pca_metabolic$x[,1],
+  y = pca_metabolic$x[,2]
+)
+
+# Graficando
+ggplot(pca_data, aes(x, y, label = row_names)) +
+  geom_text() +
+    xlab(paste0("CP 1: ", pca_var_pct[1], "%")) +
+      ylab(paste0("CP 2: ", pca_var_pct[2], "%")) +
+        theme_bw() +
+          ggtitle("Grafico PCA")
+```
+
+Se puede observar que efectivamente se perdió cualquier tendencia en la dispersión de los datos.
+
+#### Biplot
+
+```{r PCA: Biplot}
+df_procesada$metabolico <- ifelse(df_procesada$metabolico == 0, "Sin Sindrome", "Con Sindrome")
+
+ggbiplot(pca_metabolic, ellipse = TRUE, labels = rownames(pca_metabolic), groups = df_procesada$metabolico) +
+  labs(fill = "Metabolico", color = "Metabolico") +
+    theme(legend.direction = 'horizontal', legend.position = 'top')
+```
+
+Finalmente, podemos decir hay 2 clusteres bien definidos que se corresponden con la presencia/ausencia de síndrome metabólico.
+
+La **presencia** del mismo se relaciona con valores altos de:\
+- Trigliceridemia\
+- Glucemia\
+- Uricemia\
+- *Circunferencia Abdominal* ("Abdomen")\
+- IMC
+
+La **ausencia** del mismo, a su vez, con valores elevados de:\
+- HDL
+
+Esto, ademas, **se corresponde** con el conocimiento de la fisiopatológia del síndrome.
