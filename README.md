@@ -21,3 +21,13 @@ Pre-entrega:
 - metabolicSyndrome Daruich.R (Codigo)
 - metabolicSyndrome Daruich.Rmd (MarkDown)
 - metabolicSyndrome Daruich.html (HTML)
+
+Desafío 3: PCA
+- metabolicSyndrome Daruich.R (Codigo)
+- metabolicSyndrome Daruich.Rmd (MarkDown)
+- metabolicSyndrome Daruich.html (HTML)
+
+Proyecto Terminado:
+- metabolicSyndrome Daruich.R (Codigo)
+- metabolicSyndrome Daruich.Rmd (MarkDown)
+- metabolicSyndrome Daruich.html (HTML)
